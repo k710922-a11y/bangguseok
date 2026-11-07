@@ -6,7 +6,7 @@ A.D.I(adi.jawsweb.site)·해동기공과 **완전히 같은 방식**이다:
 
 | 항목 | 값 |
 |---|---|
-| 리포 | `k710922-a11y/bangguseok-web` (private) |
+| 리포 | `k710922-a11y/bangguseok` (private) |
 | 공개 도메인 | `https://bangguseok.jawsweb.site` (+ `www.bangguseok…` 은 아래 ⚠️ 참고) |
 | Supabase API | `https://api-bangguseok.jawsweb.site` (LAN Studio `http://192.168.0.202:8004` 예정) |
 | Coolify | http://192.168.0.202:8000 → Project `bangguseok` |
@@ -24,9 +24,11 @@ A.D.I(adi.jawsweb.site)·해동기공과 **완전히 같은 방식**이다:
 
 ## 1. GitHub 리포
 
+`https://github.com/k710922-a11y/bangguseok` (private, 2026-11-07 생성·첫 푸시 완료). 작업 PC 에는:
+
 ```bash
-# 작업 PC — bangguseok-web 폴더에서 (이미 커밋된 상태로 받았다면 remote 만)
-gh repo create k710922-a11y/bangguseok-web --private --source=. --remote=origin --push
+cd "C:\Users\KEYMEDI\Documents\[AI.프로젝트] 라이브.프로젝트"
+git clone https://github.com/k710922-a11y/bangguseok.git
 ```
 
 ## 2. Supabase — 전용 인스턴스 + 스키마 + 시드
@@ -37,7 +39,7 @@ Coolify Supabase 서비스 `bangguseok-supabase` → Kong 도메인 `api-banggus
 
 ## 3. Coolify 앱
 
-1. Project `bangguseok` → **+ New Resource → Private Repository (GitHub App)** → `k710922-a11y/bangguseok-web`, 브랜치 `main`
+1. Project `bangguseok` → **+ New Resource → Private Repository (GitHub App)** → `k710922-a11y/bangguseok`, 브랜치 `main`
 2. Build Pack **Railpack**, Port `3000`
 3. **Environment Variables** (Build + Runtime 모두 체크):
 
