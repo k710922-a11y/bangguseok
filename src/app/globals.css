@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* ── 방구석 디자인 토큰 ────────────────────────────────────────────────
+ * 테마는 래퍼의 data-theme 로 전환한다.
+ *   tv   = 시안 A · 채널 고정! 브라운관 TV (어두운 자취방)
+ *   ilbo = 시안 C · 방구석 일보 (캐릭터시트 누런 종이)
+ * 컴포넌트는 bg-bg / text-fg / text-muted / border-line / bg-accent … 처럼 토큰 이름만 쓴다.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent2: var(--accent2);
+  --color-on-accent: var(--on-accent);
+  --color-on-accent2: var(--on-accent2);
+  --color-osd: var(--osd);
+  --color-logo-red: #E2231A;
+  --color-logo-yellow: #F2C230;
+
+  --font-sans: "Noto Sans KR", system-ui, sans-serif;
+  --font-display: var(--display), "Black Han Sans", sans-serif;
+  --font-han: "Black Han Sans", "Noto Sans KR", sans-serif;
+  --font-myeongjo: "Nanum Myeongjo", serif;
+  --font-vt: "VT323", ui-monospace, monospace;
+}
+
+:root,
+[data-theme="tv"] {
+  --bg: #15110E;
+  --panel: #221B16;
+  --panel2: #2A211B;
+  --fg: #F3E9D8;
+  --muted: #B9AA92;
+  --line: #3A2F26;
+  --accent: #E2231A;
+  --on-accent: #FFFFFF;
+  --accent2: #F2C230;
+  --on-accent2: #15110E;
+  --osd: #7CFF6B;
+  --display: "Black Han Sans";
+}
+
+[data-theme="ilbo"] {
+  --bg: #EFE4CC;
+  --panel: #F7EFDC;
+  --panel2: #E6D8BA;
+  --fg: #1B1612;
+  --muted: #4A3D2C;
+  --line: #1B1612;
+  --accent: #B3201A;
+  --on-accent: #FFFFFF;
+  --accent2: #1B1612;
+  --on-accent2: #EFE4CC;
+  --osd: #B3201A;
+  --display: "Nanum Myeongjo";
+}
+
+[data-theme="admin"] {
+  --bg: #12100E;
+  --panel: #1C1814;
+  --panel2: #26201A;
+  --fg: #EFE6D6;
+  --muted: #A89A84;
+  --line: #3A3129;
+  --accent: #E2231A;
+  --on-accent: #FFFFFF;
+  --accent2: #F2C230;
+  --on-accent2: #12100E;
+  --osd: #7CFF6B;
+  --display: "Black Han Sans";
+}
+
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+}
+
+/* 브라운관 스캔라인 */
+.scan {
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .28) 0, rgba(0, 0, 0, .28) 1px, transparent 1px, transparent 3px);
+}
+/* TV 노이즈 */
+.noise {
+  background: repeating-radial-gradient(circle at 17% 32%, #3a3a3a 0, #8a8a8a 1px, #222 2px, #bdbdbd 3px), #555;
+  background-size: 7px 5px;
+}
+@keyframes noise-shift { 0% { background-position: 0 0; } 100% { background-position: 7px 5px; } }
+.noise-anim { animation: noise-shift .12s steps(2) infinite; }
+
+/* 신문 종이 질감 */
+.paper {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(120, 90, 40, .10) 1px, transparent 1px);
+  background-size: 5px 5px;
+}
+.rule2 { border-top: 3px solid var(--line); border-bottom: 1px solid var(--line); height: 3px; }
+
+.osd-glow { text-shadow: 0 0 8px rgba(124, 255, 107, .7); }
+
+.sr-only-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .noise-anim { animation: none; }
+  html { scroll-behavior: auto; }
+}
