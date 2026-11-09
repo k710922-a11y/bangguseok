@@ -100,7 +100,7 @@ Coolify → bangguseok-web 앱 → **Scheduled Tasks → + Add**
 | 항목 | 값 |
 |---|---|
 | Name | youtube-sync |
-| Command | `curl -fsS -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/youtube-sync` |
+| Command | `node -e "fetch('http://localhost:3000/api/cron/youtube-sync',{headers:{authorization:'Bearer '+process.env.CRON_SECRET}}).then(r=>r.text()).then(t=>console.log(t.slice(0,400)))"` (앱 이미지에 curl 이 없을 수 있어 node 사용 · 2026-11-09 등록 완료) |
 | Frequency | `*/30 * * * *` |
 
 수동 실행은 어드민 **유튜브 동기화 → 지금 가져오기**. 결과는 대시보드 「최근 유튜브 동기화」에 남는다.
