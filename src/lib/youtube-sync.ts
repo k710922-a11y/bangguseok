@@ -103,8 +103,8 @@ async function fetchApi(channelId: string, key: string): Promise<FeedItem[]> {
 
 /**
  * RSS 가 막혔을 때(유튜브 쪽 feeds/videos.xml 이 간헐적으로 404·500 을 낸다) 쓰는 대체 경로:
- * 채널의 /shorts·/videos 페이지에서 videoId 를 모으고 oEmbed 로 제목만 가져온다.
- * 설명란 태그·게시일·조회수는 알 수 없으므로 비워 둔다 (기존 값은 덮어쓰지 않음).
+ * 채널의 /shorts·/videos 페이지에서 videoId 를 모으고, 각 시청 페이지에서 제목·설명란·게시일·조회수·길이를 읽는다
+ * (시청 페이지가 막히면 oEmbed 로 제목만).
  */
 async function fetchPage(channelId: string): Promise<FeedItem[]> {
   const headers = { "user-agent": "Mozilla/5.0 (bangguseok-sync)", "accept-language": "ko-KR,ko;q=0.9" };
@@ -116,14 +116,39 @@ async function fetchPage(channelId: string): Promise<FeedItem[]> {
     for (const [, id] of html.matchAll(/"videoId":"([\w-]{11})"/g)) if (!ids.includes(id)) ids.push(id);
   }
   if (!ids.length) throw new Error("채널 페이지에서 영상을 찾지 못함");
+  // JSON 문자열 리터럴 하나를 안전하게 꺼낸다: "key":"…(escape 포함)…"
+  const str = (html: string, key: string) => {
+    const m = html.match(new RegExp(`"${key}":("(?:[^"\\\\]|\\\\.)*")`));
+    try { return m ? (JSON.parse(m[1]) as string) : null; } catch { return null; }
+  };
   const items = await Promise.all(
     ids.slice(0, 30).map(async (id): Promise<FeedItem | null> => {
-      const o = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`, { headers, cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-      return o?.title
-        ? { youtubeId: id, title: String(o.title), description: "", publishedAt: new Date().toISOString(), views: null, durationSec: null }
-        : null;
+      // 시청 페이지: 제목·설명란(#TAPE 등 태그)·게시일·조회수·길이까지 한 번에
+      const html = await fetch(`https://www.youtube.com/watch?v=${id}`, { headers, cache: "no-store" })
+        .then((r) => (r.ok ? r.text() : ""))
+        .catch(() => "");
+      // ytInitialPlayerResponse 의 videoDetails·microformat 구간만 읽는다 (페이지의 다른 "title" 과 섞이지 않게)
+      const vd = html.includes('"videoDetails"') ? html.slice(html.indexOf('"videoDetails"'), html.indexOf('"videoDetails"') + 20000) : "";
+      const mf = html.includes('"playerMicroformatRenderer"') ? html.slice(html.indexOf('"playerMicroformatRenderer"'), html.indexOf('"playerMicroformatRenderer"') + 20000) : "";
+      let title = vd ? str(vd, "title") : null;
+      if (!title) {
+        const o = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`, { headers, cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        title = o?.title ? String(o.title) : null;
+      }
+      if (!title) return null;
+      const published = (mf && (str(mf, "publishDate") ?? str(mf, "uploadDate"))) || null;
+      const views = vd ? Number(str(vd, "viewCount") ?? NaN) : NaN;
+      const len = vd ? Number(str(vd, "lengthSeconds") ?? NaN) : NaN;
+      return {
+        youtubeId: id,
+        title,
+        description: (vd && str(vd, "shortDescription")) || "",
+        publishedAt: published ? new Date(published).toISOString() : "",
+        views: Number.isFinite(views) ? views : null,
+        durationSec: Number.isFinite(len) && len > 0 ? len : null,
+      };
     })
   );
   return items.filter((i): i is FeedItem => i !== null);
@@ -180,6 +205,7 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
       if (!existing.q2 && tags.q2) patch.q2 = tags.q2;
       if (!existing.thumbnail_url) patch.thumbnail_url = thumb;
       if (it.durationSec) patch.duration_sec = it.durationSec;
+      if (it.publishedAt && it.youtubeId === (existing.youtube_id ?? it.youtubeId)) patch.published_at = it.publishedAt;
       await admin.from("episodes").update(patch).eq("id", existing.id);
       result.updated++;
     } else {
@@ -188,7 +214,7 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
         .insert({
           series_slug: s, number, tape_code: tape, title: cleanTitle(it.title), youtube_id: it.youtubeId,
           thumbnail_url: thumb, q1: tags.q1, q2: tags.q2, duration_sec: it.durationSec,
-          views: it.views, published_at: it.publishedAt, status: "published", source: "youtube-sync",
+          views: it.views, published_at: it.publishedAt || new Date().toISOString(), status: "published", source: "youtube-sync",
         })
         .select("id")
         .single();
