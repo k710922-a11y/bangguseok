@@ -93,11 +93,43 @@ async function fetchApi(channelId: string, key: string): Promise<FeedItem[]> {
   }));
 }
 
+/**
+ * RSS 가 막혔을 때(유튜브 쪽 feeds/videos.xml 이 간헐적으로 404·500 을 낸다) 쓰는 대체 경로:
+ * 채널의 /shorts·/videos 페이지에서 videoId 를 모으고 oEmbed 로 제목만 가져온다.
+ * 설명란 태그·게시일·조회수는 알 수 없으므로 비워 둔다 (기존 값은 덮어쓰지 않음).
+ */
+async function fetchPage(channelId: string): Promise<FeedItem[]> {
+  const headers = { "user-agent": "Mozilla/5.0 (bangguseok-sync)", "accept-language": "ko-KR,ko;q=0.9" };
+  const ids: string[] = [];
+  for (const tab of ["shorts", "videos"]) {
+    const res = await fetch(`https://www.youtube.com/channel/${channelId}/${tab}`, { headers, cache: "no-store" });
+    if (!res.ok) continue;
+    const html = await res.text();
+    for (const [, id] of html.matchAll(/"videoId":"([\w-]{11})"/g)) if (!ids.includes(id)) ids.push(id);
+  }
+  if (!ids.length) throw new Error("채널 페이지에서 영상을 찾지 못함");
+  const items = await Promise.all(
+    ids.slice(0, 30).map(async (id): Promise<FeedItem | null> => {
+      const o = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`, { headers, cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      return o?.title
+        ? { youtubeId: id, title: String(o.title), description: "", publishedAt: new Date().toISOString(), views: null, durationSec: null }
+        : null;
+    })
+  );
+  return items.filter((i): i is FeedItem => i !== null);
+}
+
 export async function fetchChannel(): Promise<{ items: FeedItem[]; source: string }> {
   const channelId = process.env.YOUTUBE_CHANNEL_ID || "UCpzm3QjqrZ8huyHCHehuAvg";
   const key = process.env.YOUTUBE_API_KEY;
   if (key) return { items: await fetchApi(channelId, key), source: "youtube-api" };
-  return { items: await fetchRss(channelId), source: "rss" };
+  try {
+    return { items: await fetchRss(channelId), source: "rss" };
+  } catch {
+    return { items: await fetchPage(channelId), source: "page" };
+  }
 }
 
 export type SyncResult = { source: string; found: number; inserted: number; updated: number; skipped: string[] };
@@ -131,7 +163,8 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
 
     const thumb = `https://i.ytimg.com/vi/${it.youtubeId}/hqdefault.jpg`;
     if (existing) {
-      const patch: Record<string, unknown> = { views: it.views, updated_at: new Date().toISOString() };
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (it.views !== null) patch.views = it.views;
       if (!existing.youtube_id) patch.youtube_id = it.youtubeId;
       if (!existing.q1 && tags.q1) patch.q1 = tags.q1;
       if (!existing.q2 && tags.q2) patch.q2 = tags.q2;
