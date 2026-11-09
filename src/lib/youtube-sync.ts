@@ -32,6 +32,14 @@ export function parseTitle(title: string): { series: string | null; number: numb
   return { series, number: m ? Number(m[1]) : null };
 }
 
+/** "[방구석] 춘식&덕구_아재개그_EP.08_개시리즈1탄   + + + #아재 #쇼츠" → "[방구석] 춘식&덕구 : 아재개그 EP.08 개시리즈1탄" */
+export function cleanTitle(raw: string): string {
+  let t = raw.split(/\s\+\s|\s#(?!\d)/)[0];
+  t = t.replace(/#(?!\d)\S+/g, "").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  t = t.replace(/^(\[방구석\]\s*춘식&덕구)\s*:?\s*/, "$1 : ");
+  return t || raw.trim();
+}
+
 export function parseTags(description: string, nameToSlug: Map<string, string>) {
   const tape = description.match(/#TAPE\s+([A-Z]{2,5}-\d{4})/i)?.[1]?.toUpperCase() ?? null;
   const q1 = description.match(/#Q1\s+([^\n#]+)/)?.[1]?.trim() ?? null;
@@ -157,7 +165,7 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
 
     const { data: existing } = await admin
       .from("episodes")
-      .select("id,q1,q2,thumbnail_url,youtube_id")
+      .select("id,title,q1,q2,thumbnail_url,youtube_id")
       .or(`youtube_id.eq.${it.youtubeId},tape_code.eq.${tape}`)
       .maybeSingle();
 
@@ -166,6 +174,8 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (it.views !== null) patch.views = it.views;
       if (!existing.youtube_id) patch.youtube_id = it.youtubeId;
+      // 예전 동기화가 해시태그째 넣은 제목만 정리 (어드민에서 고친 제목은 그대로)
+      if (typeof existing.title === "string" && /#|\s\+\s/.test(existing.title)) patch.title = cleanTitle(existing.title);
       if (!existing.q1 && tags.q1) patch.q1 = tags.q1;
       if (!existing.q2 && tags.q2) patch.q2 = tags.q2;
       if (!existing.thumbnail_url) patch.thumbnail_url = thumb;
@@ -176,7 +186,7 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
       const { data: ins, error } = await admin
         .from("episodes")
         .insert({
-          series_slug: s, number, tape_code: tape, title: it.title, youtube_id: it.youtubeId,
+          series_slug: s, number, tape_code: tape, title: cleanTitle(it.title), youtube_id: it.youtubeId,
           thumbnail_url: thumb, q1: tags.q1, q2: tags.q2, duration_sec: it.durationSec,
           views: it.views, published_at: it.publishedAt, status: "published", source: "youtube-sync",
         })
