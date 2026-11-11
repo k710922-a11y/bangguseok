@@ -165,7 +165,17 @@ export async function fetchChannel(): Promise<{ items: FeedItem[]; source: strin
   }
 }
 
-export type SyncResult = { source: string; found: number; inserted: number; updated: number; skipped: string[] };
+export type SyncResult = { source: string; found: number; inserted: number; updated: number; hidden: number; skipped: string[] };
+
+/** 유튜브에서 지워졌거나 비공개가 된 영상인지 (oEmbed 가 404·400·403 이면 없는 것으로 본다. 401=퍼가기 금지는 살아 있음) */
+async function isGone(id: string): Promise<boolean> {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`, { cache: "no-store" });
+    return r.status === 404 || r.status === 400 || r.status === 403;
+  } catch {
+    return false; // 네트워크 오류면 지우지 않는다
+  }
+}
 
 /** admin: service role 클라이언트(RLS 우회) */
 export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
@@ -177,7 +187,7 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
   const prefix = new Map((series ?? []).map((s: { slug: string; code_prefix: string }) => [s.slug, s.code_prefix]));
   const nameToSlug = new Map((chars ?? []).map((c: { slug: string; name: string }) => [c.name, c.slug]));
 
-  const result: SyncResult = { source, found: items.length, inserted: 0, updated: 0, skipped: [] };
+  const result: SyncResult = { source, found: items.length, inserted: 0, updated: 0, hidden: 0, skipped: [] };
 
   for (const it of items) {
     const { series: s, number } = parseTitle(it.title);
@@ -199,6 +209,12 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (it.views !== null) patch.views = it.views;
       if (!existing.youtube_id) patch.youtube_id = it.youtubeId;
+      // 같은 회차를 다시 올린 경우: 예전 영상이 유튜브에서 사라졌으면 새 영상으로 교체
+      if (existing.youtube_id && existing.youtube_id !== it.youtubeId && (await isGone(existing.youtube_id))) {
+        patch.youtube_id = it.youtubeId;
+        patch.thumbnail_url = thumb;
+        patch.title = cleanTitle(it.title);
+      }
       // 예전 동기화가 해시태그째 넣은 제목만 정리 (어드민에서 고친 제목은 그대로)
       if (typeof existing.title === "string" && /#|\s\+\s/.test(existing.title)) patch.title = cleanTitle(existing.title);
       if (!existing.q1 && tags.q1) patch.q1 = tags.q1;
@@ -228,9 +244,24 @@ export async function syncYouTube(admin: SupabaseClient): Promise<SyncResult> {
     }
   }
 
+  // 채널에 더 이상 없는 영상의 회차는 '임시'(비공개)로 내린다 — 삭제가 확인된 것만, 지우지 않고 숨김
+  const seen = new Set(items.map((i) => i.youtubeId));
+  const { data: pub } = await admin.from("episodes").select("id,title,youtube_id").eq("status", "published").not("youtube_id", "is", null);
+  const hiddenTitles: string[] = [];
+  for (const ep of pub ?? []) {
+    if (seen.has(ep.youtube_id) || !(await isGone(ep.youtube_id))) continue;
+    await admin.from("episodes").update({ status: "draft", updated_at: new Date().toISOString() }).eq("id", ep.id);
+    hiddenTitles.push(ep.title);
+    result.hidden++;
+  }
+
+  const msg = [
+    result.hidden ? `삭제된 영상 ${result.hidden}건 비공개 처리: ${hiddenTitles.join(" | ")}` : "",
+    result.skipped.length ? `건너뜀: ${result.skipped.join(" | ")}` : "",
+  ].filter(Boolean).join(" / ");
   await admin.from("sync_log").insert({
     source, found: result.found, inserted: result.inserted, updated: result.updated,
-    message: result.skipped.length ? `건너뜀: ${result.skipped.join(" | ").slice(0, 900)}` : null,
+    message: msg ? msg.slice(0, 950) : null,
   });
   return result;
 }
