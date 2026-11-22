@@ -17,12 +17,14 @@ export function navFor(theme: Theme) {
         { href: base, label: "홈" },
         { href: `${base}/tapes`, label: "비디오가게" },
         { href: `${base}/people`, label: "방구석 사람들" },
+        { href: `${base}/dict`, label: "아재개그 백과" },
         { href: `${base}/play`, label: "놀이터" },
       ]
     : [
         { href: base, label: "1면" },
         { href: `${base}/tapes`, label: "지난 호" },
         { href: `${base}/people`, label: "인물 열전" },
+        { href: `${base}/dict`, label: "아재 대사전" },
         { href: `${base}/play`, label: "퍼즐·투고" },
       ];
 }

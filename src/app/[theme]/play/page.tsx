@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { JokeMachine } from "@/components/JokeMachine";
 import { PageHead } from "@/components/PageHead";
 import { TipForm } from "@/components/TipForm";
@@ -26,6 +27,9 @@ export default async function Play({ params }: { params: Promise<{ theme: string
       <section>
         <h2 className={h2}>아재개그 자판기</h2>
         <JokeMachine initial={joke} theme={theme} />
+        <Link href={`/${theme}/dict`} className="inline-block mt-3 text-[15px] font-bold underline text-muted hover:text-fg">
+          자판기 말고 5,601문제 전부 보기 → {tv ? "아재개그 백과" : "아재 대사전"}
+        </Link>
       </section>
       <section>
         <h2 className={h2}>오답 명예의 전당</h2>
